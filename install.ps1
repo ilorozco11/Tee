@@ -34,6 +34,12 @@ catch {
     exit 1
 }
 
+# Reject non-version content (e.g. an HTML error page) before it reaches the manifest URL
+if ($version -notmatch '^\d+\.\d+\.\d+') {
+    Write-Error "Failed to get a valid version from downloads.claude.ai (got unexpected content). This can happen if the download service is unreachable or not available in your region - see https://www.anthropic.com/supported-countries"
+    exit 1
+}
+
 try {
     $manifest = Invoke-RestMethod -Uri "$DOWNLOAD_BASE_URL/$version/manifest.json" -ErrorAction Stop
     $checksum = $manifest.platforms.$platform.checksum
@@ -79,6 +85,8 @@ try {
     else {
         & $binaryPath install
     }
+    # Native exit codes don't trigger $ErrorActionPreference - capture explicitly
+    $installExitCode = $LASTEXITCODE
 }
 finally {
     try {
@@ -90,6 +98,11 @@ finally {
     catch {
         Write-Warning "Could not remove temporary file: $binaryPath"
     }
+}
+
+if ($installExitCode -ne 0) {
+    Write-Error "Installation failed (exit code $installExitCode)"
+    exit $installExitCode
 }
 
 Write-Output ""
